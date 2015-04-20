@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="dk">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Mail events</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.2/css/bootstrap.min.css">
+    <script src="https://code.jquery.com/jquery-1.11.0.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.2/js/bootstrap.min.js"></script>
+    <script src='https://cdn.ractivejs.org/latest/ractive.js'></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.8.4/moment.js"></script>
+  </head>
+  <body>
+    <div id='error_container'></div>
+    <div class="container-fluid" id='mail_event_container'></div>
+
+
+    <script id='error_template' type='text/ractive'>
+      {{#errors.length>0}}
+        <div class="alert alert-danger" role="alert">
+          {{#each errors}}
+            <b>{{msg}}</b> {{description}}<br/>
+          {{/each}}
+        </div>
+      {{/errors}}
+    </script>
+
+    <script id='mail_event_template' type='text/ractive'>
+      <!-- {{>event_row}} -->
+      <tr>
+        <td><a href="/mail_events/{{id}}">{{total_rows-((current_page-1)*limit)-i}}</a></td>
+        <td><a class="btn btn-{{state_class(doc.state)}}" on-click="toggle_state">{{state(doc.state)}}</a></td>
+        <td>{{dateFormat(key[0])}}</td>
+        <td>{{key[1]}}</td>
+        <td><span class="label label-{{value.type=='order_mail' ? 'warning' : 'default'}}">{{value.type}}</span></td>
+        <td>{{value.error}}{{value.description}}</td>
+      </tr>
+      <!-- {{/event_row}} -->
+
+      <h1>Mail events</h1>
+
+      <div class="well">
+        Country <div class="btn-group">
+          <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown" aria-expanded="false">
+            {{country.name}} <span class="caret"></span>
+          </button>
+          <ul class="dropdown-menu" role="menu">
+            {{#each countries}}
+              <li><a href="#" id="{{id}}" on-click="choose_country">{{name}}</a></li>
+            {{/each}}
+          </ul>
+        </div>
+
+        EventType <div class="btn-group">
+          <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown" aria-expanded="false">
+            {{event_type.name}} <span class="caret"></span>
+          </button>
+          <ul class="dropdown-menu" role="menu">
+            {{#each event_types}}
+              <li><a href="#" id="{{id}}" on-click="choose_event_type">{{name}}</a></li>
+            {{/each}}
+          </ul>
+        </div>
+      </div>
+      <hr/>
+      <nav>
+        <ul class="pager">
+          <li class="previous {{#first_page}} disabled{{/}}"><a on-click="previous" href="#"><span aria-hidden="{{first_page}}">&larr;</span> Newer</a></li>
+          <li class="next {{#last_page}} disabled{{/}}"><a on-click="next" href="#">Older <span aria-hidden="{{last_page}}">&rarr;</span></a></li>
+        </ul>
+      </nav>
+      Total: <span class="badge">{{total_rows}}</span>
+      Page: <span class="badge">{{current_page}}/{{total_pages}}</span>
+      <br/>
+      <table class='table table-striped'>
+        <thead>
+          <tr>
+            <th width="4%">Index</th>
+            <th width="13%">State</th>
+            <th width="13%">Date</th>
+            <th width="22%">Email</th>
+            <th width="22%">Type</th>
+            <th width="22%">Error/Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{#each events:i}}
+            {{>event_row}}
+          {{/each}}
+        </tbody>
+      </table>
+
+
+      <hr>
+    </script>
+
+
+    <script type="text/javascript">
+
+      var errors = new Ractive({
+        el: 'error_container',
+        template:  '#error_template',
+        data: {
+          errors: []
+        }
+      });
+
+      var limit=15;
+
+      var DATABASE = "https://couch01.lokalebasen.dk";
+      var events = new Ractive({
+        el: 'mail_event_container',
+        template:  '#mail_event_template',
+        data: {
+          events: [],
+          countries: [{"name": "Denmark", "id":"dk"},{"name": "Sweden", "id":"se"}],
+          event_types: [{"name": "Bounced", "id":"bounced"},{"name": "Dropped", "id":"dropped"}],
+          total_rows: 0,
+          limit: limit,
+          offset: 0,
+          current_page: 0,
+          total_pages: 0,
+          first_page: true,
+          last_page: false,
+          country: {"name": "Denmark", "id":"dk"},
+          event_type: {"name": "Bounced", "id":"bounced"},
+          dateFormat: function(str_date){
+            date = moment(str_date,"YYYY-MM-DD HH:mm:ss");
+            return date.format("DD/MM/YYYY HH:mm");
+          },
+          state_class: function(state){
+            if(state=="undefined" || state==null || state=="unhandled")
+              return "default";
+            else
+              return "success";
+          },
+          state: function(state){
+            if(state=="undefined" || state==null || state=="unhandled")
+              return "Unhandled";
+            else
+              return "Handled";
+          }
+        }
+      });
+      events.on( 'previous', function ( event ) {
+        if(!events.get("first_page")){
+          skip = events.get("offset") - limit;
+          set_events(events.get("country"), events.get("event_type"), limit, skip)
+        }
+      });
+      events.on( 'choose_country', function ( event ) {
+        set_events(event.context, events.get("event_type"), limit, 0);
+      });
+      events.on( 'choose_event_type', function ( event ) {
+        set_events(events.get("country"), event.context, limit, 0);
+      });
+      events.on( 'next', function ( event ) {
+        if(!events.get("last_page")){
+          skip = events.get("offset") + limit;
+          set_events(events.get("country"), events.get("event_type"), limit, skip)
+        }
+      });
+      events.on( 'toggle_state', function ( event ) {
+        current_state = event.context.doc.state;
+        new_state= (current_state=="handled") ? "unhandled" : "handled"
+
+        id = event.context.doc._id;
+        update_url = DATABASE +"/mail_events/_design/update/_update/set_state/"+id+"?state="+new_state
+        $.ajax({
+            url: update_url,
+            type: 'PUT',
+            success: function(result) {
+              event.context.doc.state=new_state;
+              events.update("events");
+            }
+        }).fail(function(data) {
+          errors.push("errors",{msg: data.status, description: data.statusText});
+        });
+      });
+
+      function set_events(country, event_type, limit, skip){
+        url = DATABASE + "/mail_events/_design/lists/_view/"+event_type.id+"_"+country.id+"?include_docs=true&descending=true&limit="+limit+"&skip="+skip
+        $.get(url, function( data ) {
+          response = JSON.parse(data)
+          current_page = response.offset/limit+1
+          total_pages = Math.ceil(response.total_rows/limit)
+          events.set("offset", response.offset)
+          events.set("total_rows", response.total_rows)
+          events.set("total_pages", total_pages)
+          events.set("current_page", current_page)
+          events.set("first_page", response.offset==0)
+          events.set("last_page", total_pages==current_page)
+          events.set("country", country)
+          events.set("event_type", event_type)
+          events.set("events", response.rows)
+        }).done(function() {
+
+        })
+        .fail(function(data) {
+          errors.push("errors",{msg: data.status, description: data.statusText});
+        });
+      }
+
+      window.onload = function () {
+        set_events({"name": "Denmark", "id":"dk"}, {"name": "Bounced", "id":"bounced"}, limit, 0);
+      }
+
+    </script>
+
+  </body>
+</html>
