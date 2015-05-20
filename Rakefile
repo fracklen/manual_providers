@@ -7,6 +7,7 @@ require 'rake/testtask'
 require 'rdoc/task'
 require 'net/http'
 require 'hashdiff'
+require 'logger'
 require './lib/http_client'
 require './lib/manual_providers'
 
@@ -37,7 +38,7 @@ namespace :cronjobs do
 
     def sync(database, provider_name, newest)
       begin
-        print "Syncing #{provider_name}..."
+        logger.info "Syncing #{provider_name}..."
 
         provider = couch_doc(provider_name, database)
 
@@ -46,10 +47,10 @@ namespace :cronjobs do
         unless(provider)
           provider = {"_id" => provider_name, "locations" => newest, "type" => "provider" }
           report = { date: DateTime.now, added: newest, removed: [], provider: provider_name, type: :report  }
-          puts http_client.perform_post("#{database_server_url}/#{database}", JSON.dump(report))
-          puts http_client.perform_post("#{database_server_url}/#{database}", JSON.dump(provider))
+          logger.info http_client.perform_post("#{database_server_url}/#{database}", JSON.dump(report))
+          logger.info http_client.perform_post("#{database_server_url}/#{database}", JSON.dump(provider))
           res[:action] = :created
-          puts "Provider created"
+          logger.info "Provider created"
         else
           current = provider["locations"]
           removed = current - newest
@@ -57,18 +58,18 @@ namespace :cronjobs do
           if removed.length > 0 || added.length > 0
             report = { date: DateTime.now, added: added, removed: removed, provider: provider_name, type: :report  }
             current_locations = {"_id"=> provider_name, locations: newest, type: :provider, "_rev" => provider["_rev"] }
-            puts http_client.perform_post("#{database_server_url}/#{database}", JSON.dump(report))
-            puts http_client.perform_post("#{database_server_url}/#{database}", JSON.dump(current_locations))
+            logger.info http_client.perform_post("#{database_server_url}/#{database}", JSON.dump(report))
+            logger.info http_client.perform_post("#{database_server_url}/#{database}", JSON.dump(current_locations))
             res[:action] = :updated
-            puts "Provider updated"
+            logger.info "Provider updated"
           else
             res[:action] = :no_changes
-            puts "No changes"
+            logger.info "No changes"
           end
         end
         { ok: res }
       rescue Exception => e
-        puts e
+        logger.error e
         { error: e, provider: provider_name }
       end
     end
@@ -103,4 +104,7 @@ namespace :cronjobs do
       ENV['REPORT_DATABASE']
     end
 
+    def logger
+      @logger ||= Logger.new('/var/log/manual_providers/provider_cronjob.log')
+    end
 end
