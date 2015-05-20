@@ -8,8 +8,6 @@ require 'rdoc/task'
 require 'net/http'
 require 'hashdiff'
 require './lib/http_client'
-require './lib/couch_client'
-require './lib/custom_report_client'
 require './lib/manual_providers'
 
 namespace :cronjobs do
@@ -83,15 +81,6 @@ namespace :cronjobs do
 
     def http_client
       @http_client ||= HttpClient.new
-    end
-
-    def couch_client
-      options = { :username => ENV['COUCH_USERNAME'], :password => ENV['COUCH_PASSWORD']}
-      @couch_client ||= CouchClient.new(database_server_url, options)
-    end
-
-    def custom_report_client
-      @custom_report_client ||= CustomReportClient.new(ENV['LB_USERNAME'], ENV['LB_PASSWORD'])
     end
 
     def base_report(task)
