@@ -73,7 +73,15 @@ class ManualProviders
           address = loc["addressline1"] + ", " + loc["addresspostal"] + " "+ loc["addresscity"]
           id = loc["id"]
           href = loc["url"]
-          res << {"href" => href, "address" => address, "id" => id }
+          postnummer_matcher = /.*(\d\d\d)\s(\d\d).*/.match(address)
+          if postnummer_matcher
+            postcode = postnummer_matcher[1] + postnummer_matcher[2]
+            postnummer = postcode.to_i
+
+            if postnummer >= 40010 and postnummer <= 47500
+              res << {"href" => href, "address" => address, "id" => id }
+            end
+          end
         end
       end
       res
