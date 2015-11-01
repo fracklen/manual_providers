@@ -20,4 +20,4 @@ Dir.glob('lib/tasks/*.rake').each { |r| load r}
 
 Dotenv.load(File.expand_path("../.env",  __FILE__))
 
-task default: ['cronjobs:se_manual_providers_report']
+task default: ['rabbit:run']
