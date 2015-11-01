@@ -8,9 +8,13 @@ require 'rdoc/task'
 require 'net/http'
 require 'hashdiff'
 require 'logger'
+require 'lbunny'
 require './lib/http_client'
 require './lib/manual_providers'
 require './lib/sync'
+require './lib/amqp_worker'
+require './lib/rabbitmq_client'
+require './lib/cron_subscriber_service'
 
 Dir.glob('lib/tasks/*.rake').each { |r| load r}
 
