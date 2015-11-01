@@ -118,6 +118,19 @@ class ManualProviders
       res
     end
 
+    def amf
+      url = "https://www.amffastigheter.se/Lediga-lokaler"
+       mechanize = Mechanize.new
+      page = mechanize.get(url)
+      res = []
+      page.links.select do |link|
+        /\/Lediga-lokaler\/[A-Z0-9]{16}\/.*/.match(link.href)
+      end.each do |link|
+        res << {"href" => link.href, "address" => link.text, "id" => /[A-Z0-9]{16}/.match(link.href)[0]} unless link.href.nil?
+      end
+      res
+    end
+
   end
 
 end

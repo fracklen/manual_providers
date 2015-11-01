@@ -21,13 +21,14 @@ namespace :cronjobs do
     hc = HttpClient.new
     report = base_report(t)
     report[:providers] = []
-    report[:providers] << sync(report_key, "kungsleden", ManualProviders.kungsleden)
-    report[:providers] << sync(report_key, "skanska", ManualProviders.skanska)
-    report[:providers] << sync(report_key, "svenska_hus", ManualProviders.svenska_hus)
-    report[:providers] << sync(report_key, "tribona", ManualProviders.tribona)
-    report[:providers] << sync(report_key, "profi", ManualProviders.profi)
-    report[:providers] << sync(report_key, "wilfast", ManualProviders.wilfast)
-    report[:providers] << sync(report_key, "areim", ManualProviders.areim)
+    report[:providers] << sync(report_key, :kungsleden)
+    report[:providers] << sync(report_key, :skanska)
+    report[:providers] << sync(report_key, :svenska_hus)
+    report[:providers] << sync(report_key, :tribona)
+    report[:providers] << sync(report_key, :profi)
+    report[:providers] << sync(report_key, :wilfast)
+    report[:providers] << sync(report_key, :areim)
+    report[:providers] << sync(report_key, :amf)
     report[:end_date] = DateTime.now
     report[:status] = :finished
     report[:details] = "#{report[:providers].length} manual providers handled"
@@ -36,48 +37,51 @@ namespace :cronjobs do
 
   private
 
-    def sync(database, provider_name, newest)
-      begin
-        logger.info "Syncing #{provider_name}..."
+    def sync(database, provider_key)
+      logger.info "Syncing #{provider_key}..."
+      newest = ManualProviders.send(provider_key)
 
-        provider = couch_doc(provider_name, database)
+      provider = couch_doc(provider_key, database)
 
-        res = { provider: provider_name}
+      res = { provider: provider_key}
 
-        unless(provider)
-          provider = {"_id" => provider_name, "locations" => newest, "type" => "provider" }
-          report = { date: DateTime.now, added: newest, removed: [], provider: provider_name, type: :report  }
+      unless(provider)
+        provider = {"_id" => provider_key, "locations" => newest, "type" => "provider" }
+        report = { date: DateTime.now, added: newest, removed: [], provider: provider_key, type: :report  }
+        logger.info http_client.perform_post("#{database_server_url}/#{database}", JSON.dump(report))
+        logger.info http_client.perform_post("#{database_server_url}/#{database}", JSON.dump(provider))
+        res[:action] = :created
+        logger.info "Provider created"
+      else
+        current = provider["locations"]
+        removed = current - newest
+        added = newest - current
+        if removed.length > 0 || added.length > 0
+          report = { date: DateTime.now, added: added, removed: removed, provider: provider_key, type: :report  }
+          current_locations = {"_id"=> provider_key, locations: newest, type: :provider, "_rev" => provider["_rev"] }
           logger.info http_client.perform_post("#{database_server_url}/#{database}", JSON.dump(report))
-          logger.info http_client.perform_post("#{database_server_url}/#{database}", JSON.dump(provider))
-          res[:action] = :created
-          logger.info "Provider created"
+          logger.info http_client.perform_post("#{database_server_url}/#{database}", JSON.dump(current_locations))
+          res[:action] = :updated
+          logger.info "Provider updated"
         else
-          current = provider["locations"]
-          removed = current - newest
-          added = newest - current
-          if removed.length > 0 || added.length > 0
-            report = { date: DateTime.now, added: added, removed: removed, provider: provider_name, type: :report  }
-            current_locations = {"_id"=> provider_name, locations: newest, type: :provider, "_rev" => provider["_rev"] }
-            logger.info http_client.perform_post("#{database_server_url}/#{database}", JSON.dump(report))
-            logger.info http_client.perform_post("#{database_server_url}/#{database}", JSON.dump(current_locations))
-            res[:action] = :updated
-            logger.info "Provider updated"
-          else
-            res[:action] = :no_changes
-            logger.info "No changes"
-          end
+          res[:action] = :no_changes
+          logger.info "No changes"
         end
-        { ok: res }
-      rescue Exception => e
-        logger.error e
-        { error: e, provider: provider_name }
       end
+
+      { ok: res }
+    rescue Exception => e
+      logger.error e
+      { error: e.message.force_encoding('utf-8'), provider: provider_key }
     end
 
     def couch_doc(id, database)
       url = database_server_url + database + "/#{id}"
       doc = JSON.load http_client.perform_get_basic_auth(url, ENV['COUCH_USERNAME'], ENV['COUCH_PASSWORD'])
       (doc.has_key?("error") && doc["error"]=="not_found") ? nil : doc
+    rescue => e
+      logger.error(e)
+      nil
     end
 
     def http_client
@@ -105,6 +109,10 @@ namespace :cronjobs do
     end
 
     def logger
-      @logger ||= Logger.new('/var/log/manual_providers/provider_cronjob.log')
+      if File.directory?('/var/log/manual_providers/')
+        @logger ||= Logger.new('/var/log/manual_providers/provider_cronjob.log')
+      else
+        @logger ||= Logger.new('cronjob.log')
+      end
     end
 end
