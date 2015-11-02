@@ -62,7 +62,7 @@ class CronSubscriberService
       app_id:       "manual_providers",
       persistent:   true,
       content_type: 'application/json',
-      timestamp:    Time.zone.now.to_i
+      timestamp:    Time.now.to_i
     }
   end
 
